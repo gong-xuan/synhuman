@@ -48,7 +48,7 @@ class my_train_rendering():
                                                         log_path=log_path,
                                                         load_logs=load_logs,
                                                         current_epoch=self.start_epoch,
-                                                        track_val=args.valdata)
+                                                        track_val=True)
 
     def load_checkpoint(self, model_savedir, args):
         if args.resume_from_epoch:

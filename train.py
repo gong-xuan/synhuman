@@ -8,7 +8,6 @@ from loss.loss import Build_Loss
 from synthetic_train import my_train_rendering
 from synthesis import RenderGenerate
 
-#python run_mytrain.py --epochs 240 --batch_size 140 --lossvar --pr bj
 
 #python train.py 
 def get_arguments():

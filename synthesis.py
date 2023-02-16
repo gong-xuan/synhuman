@@ -162,7 +162,8 @@ class RenderGenerate():
             # Vertex noise augmentation to give noisy proxy representation edges
             aug_vertices = random_verts2D_deviation(vertices,
                                 delta_verts2d_dev_range=self.proxy_rep_augment_params['delta_verts2d_dev_range'])
-        
+        else:
+            aug_vertices = vertices
         depth_map, normal_map, iuv_map, _ = self.renderer(aug_vertices, cam_T)
         # print('render', datetime.now().strftime("%m%d%H%M%S"))
 
@@ -173,7 +174,6 @@ class RenderGenerate():
                 iuv_map, joints2D=joints2d_coco, depth_map=depth_map, normal_map=normal_map)
                 
         # print('crop', datetime.now().strftime("%m%d%H%M%S"))
-
         # saveKPIUV(joints2d_coco, iuv_map,rootpath='vis2')
 
         #CHECK OCCLUSION BEFORE PROXY AUGMENT
