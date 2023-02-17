@@ -40,6 +40,7 @@ class my_train_rendering():
             self.scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(self.optimiser, args.epochs, eta_min=1e-5)
 
         # CKPT
+        self.model_savedir = model_savedir
         load_logs = self.load_checkpoint(model_savedir, args)
         #
         self.metrics_tracker = TrainingLossesAndMetricsTracker(losses_to_track=losses_to_track,
