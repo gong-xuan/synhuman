@@ -16,7 +16,8 @@ class SingleInputRegressor(nn.Module):
                  resnet_in_channels=1,
                  ief_iters=3,
                  itersup=False,
-                 reginput='dimensional',
+                 reginput_ch=512,
+                 reginput_hw=1,
                  encoddrop=False):
         """
         :param resnet_in_channels: 1 if input silhouette/segmentation, 1 + num_joints if
@@ -24,42 +25,40 @@ class SingleInputRegressor(nn.Module):
         :param ief_iters: number of IEF iterations.
         """
         super(SingleInputRegressor, self).__init__()
-        IEFfunction = SpatialIEFModule if not reginput=='dimensional' else IEFModule
-        pool_out = True if reginput.startswith('dimension') else False
-        self.reginput = reginput
+        IEFfunction = SpatialIEFModule if reginput_hw>1 else IEFModule
+        
         self.itersup = itersup
         num_pose_params = 24*6
         num_output_params = 3 + num_pose_params + 10
         self.cam_params, self.pose_params, self.shape_params = [], [], []
-        if reginput=='spatial16':
-            filter_channels =[512, 256, 64, 4]
-            ief_channel = 1024
-            pool1 = False
-        elif reginput=='dimension16':
-            # filter_channels =[512, 256, 64, 8]
-            ief_channel = 1024
-            ief_channel = 512
+        
+        self.reginput_ch = reginput_ch
+        self.reginput_hw = reginput_hw
+        #channel
+        filter_channels = [512]#[512,128,32,8,2,1]
+        if reginput_ch!=512:
+            filter_channels = [512, reginput_ch] if reginput_ch>=32 else [512, 32, reginput_ch]
+        
+        #height,width
+        if reginput_hw==16:
             pool1 = False
         else:
-            filter_channels =[512, 256, 64, 8]
-            ief_channel = 512
             pool1 = True
-        self.image_encoder = resnet18(in_channels=resnet_in_channels, drop = encoddrop,
-                                        pretrained=False, pool_out=pool_out, pool1=pool1)
+        
+        ief_channel = reginput_ch*reginput_hw*reginput_hw
+        
+        self.image_encoder = resnet18(in_channels=resnet_in_channels, 
+                                        drop = encoddrop,
+                                        pretrained=False, 
+                                        pool1=pool1,
+                                        pool_out=False, 
+                                        )
         self.ief_module = IEFfunction([ief_channel, ief_channel],#[1024,1024],#[512, 512],
                                     ief_channel,#1024, #512,
                                     num_output_params,
                                     iterations=ief_iters)
-        # elif resnet_layers == 50:
-        #     self.image_encoder = resnet50(in_channels=resnet_in_channels,
-        #                                   pretrained=False)
-        #     self.ief_module = IEFModule([1024, 1024],
-        #                                 2048,
-        #                                 num_output_params,
-        #                                 iterations=ief_iters)
-        #(512,8,8)
-        # if not reginput.startswith('dimension'):
-        if reginput.startswith('spatial'):
+
+        if len(filter_channels)>1:
             self.add_mlp(filter_channels = filter_channels)
         
            
@@ -108,14 +107,20 @@ class SingleInputRegressor(nn.Module):
         return out_feats
 
     def forward(self, input):
-        input_feats, _, _ = self.image_encoder(input)
+        input_feats, _, _ = self.image_encoder(input) #(bs, 512, 8, 8)  or (bs, 512, 16, 16)
         
-        if self.reginput.startswith('spatial'):
-            input_feats = input_feats.view(input_feats.shape[0], input_feats.shape[1],-1)
-            # import ipdb; ipdb.set_trace()
-            input_feats = self.reduce_dim(input_feats)[-1]#only use the last one
-            input_feats = input_feats.view(input_feats.shape[0], -1)
-        # import ipdb; ipdb.set_trace()
+        #keep channel, compress HW
+        if self.reginput_hw<8:
+            input_feats = nn.AdaptiveAvgPool2d((self.reginput_hw, self.reginput_hw))(input_feats)
+        #keep HW, compress channel
+        if self.reginput_ch<512: 
+            input_feats = input_feats.view(input_feats.shape[0], input_feats.shape[1],-1) #(bs, ch, hw)
+            input_feats = self.reduce_dim(input_feats)[-1]#only use the last one #(bs, ch_target, hw)
+        input_feats = input_feats.view(input_feats.shape[0], -1)
+        print(input_feats.shape)
+        import ipdb; ipdb.set_trace()
+        # 
+        
         
         cam_params, pose_params, shape_params = self.ief_module(input_feats)
         if not self.itersup:

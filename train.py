@@ -2,7 +2,7 @@ import os, argparse, logging, configs
 import torch
 
 from datetime import datetime
-from dataload.dataloader import Build_TrainDataloader
+from dataload.dataloader import Build_Train_Dataloader
 from model.model import Build_Model
 from loss.loss import Build_Loss
 from synthetic_train import my_train_rendering
@@ -26,7 +26,10 @@ def get_arguments():
     #setting
     parser.add_argument('--pr', type=str, default='bj') #ONLY support bj for now
     parser.add_argument('--cra', action='store_true')
-    parser.add_argument('--reginput',type=str, default='dimensional') #if non-cra
+    #parser.add_argument('--reginput',type=str, default='dimensional') #for non-cra 
+    parser.add_argument('--reg_ch', type=int, default=512) 
+    parser.add_argument('--reg_hw', type=int, default=1) #[16,8,4,2,1]
+    
     parser.add_argument('--valaug', type=int, default=1)
     parser.add_argument('--valdata', type=str, default='') #['', 'h36m', '3dpw'] #ONLY support '' for now
     #Loss
@@ -71,7 +74,7 @@ if __name__ == '__main__':
     logging.info(args)
     
     # DATA
-    train_dataloader, val_dataloader = Build_TrainDataloader(args.batch_size, 
+    train_dataloader, val_dataloader = Build_Train_Dataloader(args.batch_size, 
                                                              num_workers=args.num_workers, 
                                                              valdata=args.valdata) 
     # MODEL
@@ -80,7 +83,8 @@ if __name__ == '__main__':
                                         pr_mode=args.pr, 
                                         device=device, 
                                         itersup=args.itersup, 
-                                        reginput=args.reginput)
+                                        reginput_ch=args.reg_ch,
+                                        reginput_hw=args.reg_hw)
     # LOSS
     criterion, losses_to_track = Build_Loss(device=device, 
                                             var=args.lossvar, 

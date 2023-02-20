@@ -4,6 +4,20 @@ Parts of the code are adapted from https://github.com/akanazawa/hmr
 
 import numpy as np
 
+
+class AverageMeter():
+    def __init__(self):
+        self.count = 0
+        self.sum = 0
+        
+    def update(self, value, n=1):
+        self.count += n
+        self.sum += value*n
+        # print(self.count)
+
+    def average(self):
+        return self.sum/(self.count)
+
 def compute_similarity_transform(S1, S2):
     """
     Computes a similarity transform (sR, t) that takes

@@ -16,7 +16,7 @@ def Build_SMPL(batch_size, device, gender=''):
     return smpl_model
 
 def Build_Model(batch_size, cra_mode=False, pr_mode='bj', device='cpu',
-            itersup=False, reginput='dimensional',  gender=''):
+            itersup=False, reginput_ch=512, reginput_hw=1,  gender=''):
     smpl_model = Build_SMPL(batch_size, device, gender=gender)
 
     if pr_mode=='bj':
@@ -52,7 +52,8 @@ def Build_Model(batch_size, cra_mode=False, pr_mode='bj', device='cpu',
         regressor = SingleInputRegressor(sum(resnet_in_channels),  
                                          ief_iters=3, 
                                          itersup=itersup, 
-                                         reginput=reginput, 
+                                         reginput_ch=reginput_ch,
+                                         reginput_hw=reginput_hw, 
                                          encoddrop=False)
     
     regressor.to(device)

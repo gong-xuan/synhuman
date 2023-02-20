@@ -2,6 +2,8 @@
 import os, cv2, torch
 import numpy as np
 import colorsys
+import sys
+import matplotlib.pyplot as plt
 
 
 def saveKP2D(keypoints, savePath, image=None, H=256, W=256, color=(0,255,0), addText=True, circle_size=5):
@@ -82,3 +84,48 @@ def vis_j2d_occlusion_batch(IUV_batch, j2d_batch, j2d_no_occluded_mask_batch, vi
             vis_image = saveKP2D(joints2D[nj][None], None, image=vis_image, H=hw, W=hw, color=color, addText=False)
         cv2.imwrite(f'{visdir}/{b}.png', vis_image)
         # import ipdb; ipdb.set_trace()
+
+def vis_bboxs(save_path, image, bboxs, gt_box=None, gt_center=None):
+    for n in range(bboxs.shape[0]):
+        x0, y0, x1, y1 = bboxs[n]
+        x0,y0,x1,y1 = x0.int().item(), y0.int().item(), x1.int().item(), y1.int().item()
+        image = cv2.rectangle(image, (x0,y0), (x1,y1), (0,255,0), 5)
+    if gt_box is not None:
+        x0, y0, x1, y1 = gt_box
+        x0,y0,x1,y1 = x0.int().item(), y0.int().item(), x1.int().item(), y1.int().item()
+        image = cv2.rectangle(image, (x0,y0), (x1,y1),  (0,0,255), 5)
+    if gt_center is not None:
+        x , y = gt_center
+        image = cv2.circle(image, (int(x), int(y)), 20, (0,0,255), -1)
+    cv2.imwrite(save_path, image)
+
+
+def apply_colormap(image, vmin=None, vmax=None, cmap='viridis', cmap_seed=1):
+    """
+    Apply a matplotlib colormap to an image.
+
+    This method will preserve the exact image size. `cmap` can be either a
+    matplotlib colormap name, a discrete number, or a colormap instance. If it
+    is a number, a discrete colormap will be generated based on the HSV
+    colorspace. The permutation of colors is random and can be controlled with
+    the `cmap_seed`. The state of the RNG is preserved.
+    """
+    image = image.astype("float64")  # Returns a copy.
+    # Normalization.
+    if vmin is not None:
+        imin = float(vmin)
+        image = np.clip(image, vmin, sys.float_info.max)
+    else:
+        imin = np.min(image)
+    if vmax is not None:
+        imax = float(vmax)
+        image = np.clip(image, -sys.float_info.max, vmax)
+    else:
+        imax = np.max(image)
+    image -= imin
+    image /= (imax - imin)
+    # Visualization.
+    cmap_ = plt.get_cmap(cmap)
+    vis = cmap_(image, bytes=True)
+    return vis
+

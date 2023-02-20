@@ -68,53 +68,7 @@ class IEFModule(nn.Module):
         return cam_params, pose_params, shape_params
 
 
-class IEFModuleMAF(IEFModule):
-    """
-    Iterative error feedback module that regresses SMPL body model parameters (and
-    weak-perspective camera parameters) given input features.
-    """
-    def __init__(self, fc_layers_neurons=[512,512], in_features=512, num_output_params=24*6+13, iterations=1):
-        super(IEFModule, self).__init__()
 
-        self.fc1 = nn.Linear(in_features + num_output_params, fc_layers_neurons[0])
-        self.drop1 = nn.Dropout()
-        self.fc2 = nn.Linear(fc_layers_neurons[0], fc_layers_neurons[1])
-        self.drop2 = nn.Dropout()
-        self.fc3 = nn.Linear(fc_layers_neurons[1], num_output_params)
-        # self.relu = nn.ReLU(inplace=True)#STRAP use relu instead of drop1, drop2
-        torch.nn.init.zeros_(self.fc1.bias)
-        torch.nn.init.zeros_(self.fc2.bias)
-        torch.nn.init.zeros_(self.fc3.bias)
-
-        self.ief_layers = nn.Sequential(self.fc1,
-                                        self.drop1,
-                                        self.fc2,
-                                        self.drop2,
-                                        self.fc3)
-
-        self.iterations = iterations
-        self.initial_params_estimate = self.load_mean_params_6d_pose(config.SMPL_MEAN_PARAMS_PATH)
-
-    def forward(self, img_features, init_parameters=None):
-        batch_size = img_features.size(0)#(bs,512)
-        if init_parameters==None:
-            params_estimate = self.initial_params_estimate.repeat([batch_size, 1])
-            params_estimate = params_estimate.to(img_features.device)#(bs, 24*6+10+3)
-        else:
-            params_estimate = init_parameters
-        # import ipdb; ipdb.set_trace()
-
-        state = torch.cat([img_features, params_estimate], dim=1)
-        for i in range(self.iterations):
-            delta = self.ief_layers(state)
-            params_estimate += delta
-            state = torch.cat([img_features, params_estimate], dim=1)
-
-        # cam_params = params_estimate[:, :3]
-        # pose_params = params_estimate[:, 3:3 + 24*6]
-        # shape_params = params_estimate[:, 3 + 24*6:]
-        # return cam_params, pose_params, shape_params
-        return params_estimate
 
 
 class SpatialIEFModule(IEFModule):
@@ -138,7 +92,7 @@ class SpatialIEFModule(IEFModule):
                                         self.fc3)
 
         self.iterations = iterations
-        self.initial_params_estimate = self.load_mean_params_6d_pose(config.SMPL_MEAN_PARAMS_PATH)
+        self.initial_params_estimate = self.load_mean_params_6d_pose(configs.SMPL_MEAN_PARAMS_PATH)
         # import ipdb; ipdb.set_trace()
 
 class FuseIEFModule(IEFModule):
@@ -162,7 +116,7 @@ class FuseIEFModule(IEFModule):
                                         self.fc3)
 
         self.iterations = iterations
-        self.initial_params_estimate = self.load_mean_params_6d_pose(config.SMPL_MEAN_PARAMS_PATH)
+        self.initial_params_estimate = self.load_mean_params_6d_pose(configs.SMPL_MEAN_PARAMS_PATH)
 
     def forward(self, img_features, params_estimate1, params_estimate2):
         

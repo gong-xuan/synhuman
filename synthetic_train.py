@@ -5,7 +5,7 @@ from tqdm import tqdm
 from datetime import datetime
 import configs
 
-from eval.train_loss_and_metrics_tracker import TrainingLossesAndMetricsTracker
+from eval.loss_metrics_tracker import LossMetricsTracker
 from utils.checkpoint_utils import load_training_info_from_checkpoint
 from utils.proxyrep_utils import convert_to_proxyfeat_batch
 import utils.label_conversions as LABELCONFIG
@@ -43,13 +43,13 @@ class my_train_rendering():
         self.model_savedir = model_savedir
         load_logs = self.load_checkpoint(model_savedir, args)
         #
-        self.metrics_tracker = TrainingLossesAndMetricsTracker(losses_to_track=losses_to_track,
-                                                        metrics_to_track=metrics_to_track,
-                                                        img_wh=configs.REGRESSOR_IMG_WH,
-                                                        log_path=log_path,
-                                                        load_logs=load_logs,
-                                                        current_epoch=self.start_epoch,
-                                                        track_val=True)
+        self.metrics_tracker = LossMetricsTracker(losses_to_track=losses_to_track,
+                                                metrics_to_track=metrics_to_track,
+                                                img_wh=configs.REGRESSOR_IMG_WH,
+                                                log_path=log_path,
+                                                load_logs=load_logs,
+                                                current_epoch=self.start_epoch,
+                                                track_val=True)
 
     def load_checkpoint(self, model_savedir, args):
         if args.resume_from_epoch:

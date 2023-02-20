@@ -3,7 +3,7 @@ import torch
 import torch.nn.functional as nnf
 
 import configs
-import utils.label_conversions as labelconfigs
+import utils.label_conversions as LABELCONFIG
 from utils.renderer import build_cam_renderer
 from utils.aug_utils import load_aug_settings, augment_cam_t, augment_proxy_representation_IUV, random_verts2D_deviation
 from utils.smpl_utils import smpl_forward, sample_shape
@@ -151,9 +151,9 @@ class RenderGenerate():
         # print('smpl forward', datetime.now().strftime("%m%d%H%M%S"))
         
         # convert to 3D/2D joints (b*90*3)
-        joints_h36m = joints_all[:, labelconfigs.ALL_JOINTS_TO_H36M_MAP, :]
-        joints_h36mlsp = joints_h36m[:, labelconfigs.H36M_TO_J14, :]
-        joints_coco = joints_all[:, labelconfigs.ALL_JOINTS_TO_COCO_MAP, :]#17 
+        joints_h36m = joints_all[:, LABELCONFIG.ALL_JOINTS_TO_H36M_MAP, :]
+        joints_h36mlsp = joints_h36m[:, LABELCONFIG.H36M_TO_J14, :]
+        joints_coco = joints_all[:, LABELCONFIG.ALL_JOINTS_TO_COCO_MAP, :]#17 
         joints2d_coco = perspective_project_torch(joints_coco, self.cam_R,
                                                             cam_T,
                                                             cam_K=self.cam_K)#b*3*3

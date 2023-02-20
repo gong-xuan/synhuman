@@ -4,7 +4,7 @@ import pickle, logging
 from .metrics import procrustes_analysis_batch, scale_and_translation_transform_batch
 from utils.joints_utils import undo_keypoint_normalisation
 
-class TrainingLossesAndMetricsTracker:
+class LossMetricsTracker:
     """
     Tracks training and validation losses (both total and per-task) and metrics during
     training. Updates loss and metrics history at end of each epoch.
