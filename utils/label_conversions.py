@@ -23,8 +23,13 @@ ALL_JOINTS_TO_H36M_MAP = list(range(73, 90))
 # Indices to get the 14 LSP joints from the 17 H36M joints
 H36M_TO_J17 = [6, 5, 4, 1, 2, 3, 16, 15, 14, 11, 12, 13, 8, 10, 0, 7, 9]
 H36M_TO_J14 = H36M_TO_J17[:14]
+J17_TO_J14 = list(range(14))
 
 J24_TO_J17 = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 18, 14, 16, 17]
+# J24_to_J14 = [0,1,2,3,4,5,6,7,8,9,10,11,17,18] #?????TOCHECK
+# joints_name = ("R_Ankle0", "R_Knee1", "R_Hip2", "L_Hip3", "L_Knee4", "L_Ankle5", "R_Wrist6",
+#         "R_Elbow7", "R_Shoulder8", "L_Shoulder9", "L_Elbow10", "L_Wrist11", "Thorax12",
+#         "Head13", "HeadTop14")
 
 # **********24 body-part convention:
 # 1, 2 = Torso, 3 = Right Hand, 4 = Left Hand, 5 = Left Foot, 6 = Right Foot, 
@@ -354,3 +359,8 @@ def convert_densepose_seg_to_14part_labels(densepose_seg):
         fourteen_part_seg[densepose_seg == 24] = 10
 
         return fourteen_part_seg
+
+def lspjoints_root_centered(S):    
+    center = (S[:,2,:3] +  S[:,3,:3])/2. #between two hip points
+    center = np.expand_dims(center, axis=1)
+    return S

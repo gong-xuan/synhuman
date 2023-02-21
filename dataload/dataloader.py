@@ -46,7 +46,7 @@ def Build_Test_Dataloader(args, pr_path='', img_path=''):
         dataset = TestPr_MPI3DHP(img_path, pr_path) if pr_exist else TestImg_MPI3DHP(crop=args.img_crop_scale)
         withshape = False
         metrics = ['mpjpe_pa', 'pck_pa']
-    
+    print(len(dataset))
     dataloader = DataLoader(dataset, 
                             batch_size=args.batch_size, 
                             shuffle=args.shuffle,

@@ -4,6 +4,7 @@ from torch.utils.data import Dataset
 
 import configs
 from utils.image_utils import pad_to_square, crop_bbox_centerscale
+import utils.label_conversions as LABELCONFIG
 
 
 class TestImg_SSP3D(Dataset):
@@ -69,11 +70,6 @@ class TestImg_SSP3D(Dataset):
         body_mask = np.expand_dims(body_mask, axis=2)
         masked_image = masked_image*body_mask+(1-body_mask)*np.zeros_like(masked_image)
 
-        # image = torch.from_numpy(image.permute(2,0,1))
-        # iuv = torch.from_numpy(iuv.astype(np.float32))  
-        # iuv = expand_bbox(iuv,self.prep_wh, self.prep_wh, bbox_xyxy)#(3, wh, wh)
-        # iuv = iuv.permute(1,2,0)
-
         body_pixels = np.argwhere(body_mask[:,:,0] != 0)
         # import ipdb; ipdb.set_trace()
         y0, x0 = np.amin(body_pixels, axis=0)
@@ -99,13 +95,8 @@ class TestImg_SSP3D(Dataset):
             scale = scale*self.crop
             image = crop_bbox_centerscale(image, center, scale, 
                 res=self.prep_wh, resize_interpolation=cv2.INTER_LINEAR)
-            # print('image', index)
-            # iuv = crop_bbox_centerscale(iuv, center, scale, 
-            #     res=self.prep_wh, resize_interpolation=cv2.INTER_NEAREST)
             scale = 0
-        # else: 
-        #     image = pad_to_square(image)
-        #     iuv = pad_to_square(iuv)
+       
 
         pose = self.pose[index]
         shape = self.shape[index]
@@ -113,7 +104,6 @@ class TestImg_SSP3D(Dataset):
             "Poses and shapes are wrong: {}, {}".format(pose.shape, shape.shape)
         return {'imgname': imgname,
                 'image':image,
-                # 'iuv': iuv,
                 'pose': pose,
                 'shape': shape,
                 'center': center,
@@ -124,10 +114,7 @@ class TestImg_3DPW(TestImg_SSP3D):
     def __init__(self, rootpath=configs.D3PW_IMG_PATH, gtfile=configs.D3PW_GT, proxy_rep_input_wh=256, crop=0):
         data =  np.load(gtfile, allow_pickle=True)
         imgfiles = data['imgname'].tolist()
-        self.imgnames = [f'{rootpath}/{imgf}' for imgf in imgfiles]
-        # import ipdb; ipdb.set_trace()
-        # self.iuvnames = [rootpath+'/iuvFiles/'+ '/'.join(imgf.split('/')[1:])[:-4] +'.npz' for imgf in imgfiles]
-        
+        self.imgnames = [f'{rootpath}/{imgf}' for imgf in imgfiles]        
         self.pose = data['pose']
         self.shape = data['shape']
         self.prep_wh = proxy_rep_input_wh
@@ -139,45 +126,21 @@ class TestImg_H36M(TestImg_SSP3D):
     def __init__(self, protocal=2, rootpath=configs.H36M_IMG_PATH, proxy_rep_input_wh=512, crop=0):
         gtfile=configs.H36M_P2_GT if protocal==2 else configs.H36M_P1_GT
         data = np.load(gtfile, allow_pickle=True)  
-        J24_4d = data['S'] #(27558,24,4)
-        self.J14_3d = self.root_centered(J24_4d)
-        # import ipdb; ipdb.set_trace()
+        J24_4d = data['S'] #(27558,24,4)        
+        self.J17_3d = J24_4d[:, LABELCONFIG.J24_TO_J17, :3]
         self.prep_wh = proxy_rep_input_wh
         self.crop = crop
         imgfiles =data['imgname'].tolist()
         self.imgnames = [f'{rootpath}/{imgf}' for imgf in imgfiles]
-        # self.iuvnames = [f'{rootpath}/iuv/{imgf[7:-4]}.npz' for imgf in imgfiles]
         self.bbox_centers = data['center'] #27588*2
         self.scales = data['scale']*200 #27588
-        # if not usedata=='all':
-        #     usen = int(usedata)
-        #     self.J14_3d = self.J14_3d[:usen]
-        #     self.imgnames = self.imgnames[:usen]
-        #     self.bbox_centers = self.bbox_centers[:usen]
-        #     self.scales = self.scales[:usen]
 
-
-    def root_centered(self, S):
-        J24_to_J14 = [0,1,2,3,4,5,6,7,8,9,10,11,17,18]
-        # joints_name = ("R_Ankle0", "R_Knee1", "R_Hip2", "L_Hip3", "L_Knee4", "L_Ankle5", "R_Wrist6",
-        #         "R_Elbow7", "R_Shoulder8", "L_Shoulder9", "L_Elbow10", "L_Wrist11", "Thorax12",
-        #         "Head13", "HeadTop14")
-        # J24_to_J14 = config.H36M_TO_J14
-        
-        center = (S[:,2,:3] +  S[:,3,:3])/2 #between two hip points
-        center = np.expand_dims(center, axis=1)
-        S = S[:, J24_to_J14, :3]
-        S = S - center
-        return S
 
     def __getitem__(self, index):
-        j14_3d = self.J14_3d[index]
+        j17_3d = self.J17_3d[index]
         imgname = self.imgnames[index]
         image = cv2.imread(imgname)
-        # iuv = np.load(self.iuvnames[index],allow_pickle=True)['iuv'] #(3, imgh,imgw)
-        # iuv = np.transpose(iuv,(1,2,0)) #(imgh, imgw, 3)
-        # assert iuv.shape == image.shape
-        # print(np.unique(iuv))
+        
         center = self.bbox_centers[index]
         scale = self.scales[index]
 
@@ -185,28 +148,11 @@ class TestImg_H36M(TestImg_SSP3D):
             scale = scale*self.crop
             image = crop_bbox_centerscale(image, center, scale, 
                 res=self.prep_wh, resize_interpolation=cv2.INTER_LINEAR)
-            # print('image', index)
-            # iuv = crop_bbox_centerscale(iuv, center, scale, 
-            #     res=self.prep_wh, resize_interpolation=cv2.INTER_NEAREST)
-            # print('iuv', index)
             scale = 0
-        # else: #make it a square
-        #     image = pad_to_square(image)
-        #     iuv = pad_to_square(iuv)
-        
-        # masked_image = image.copy()
-        # body_mask = (iuv[:,:,0]>0).astype('uint8')
-        # body_mask = np.expand_dims(body_mask, axis=2)
-        # masked_image = masked_image*body_mask+(1-body_mask)*np.zeros_like(masked_image)
-
-        # image = torch.from_numpy(image.permute(2,0,1))
-        # iuv = torch.from_numpy(iuv.astype(np.float32)) 
-        # pose = torch.from_numpy(pose.astype(np.float32))
-        # shape = torch.from_numpy(shape.astype(np.float32))
+       
         return {'imgname': imgname,
                 'image':image,
-                # 'iuv': iuv,
-                'j14_3d': j14_3d,
+                'j17_3d': j17_3d,
                 'center': center,
                 'scale': scale}
 
@@ -214,13 +160,11 @@ class TestImg_MPI3DHP(TestImg_H36M):
     def __init__(self, gtfile=configs.MPI3DHP_GT, rootpath=configs.MPI3DHP_IMG_PATH, proxy_rep_input_wh=512, crop=0):
         data = np.load(gtfile, allow_pickle=True)  
         J24_4d = data['S'] #(27558,24,4)
-        self.J14_3d = self.root_centered(J24_4d)
-        # import ipdb; ipdb.set_trace()
+        self.J17_3d = J24_4d[:, LABELCONFIG.J24_TO_J17, :3]
         self.prep_wh = proxy_rep_input_wh
         self.crop = crop
         imgfiles =data['imgname'].tolist()
         self.imgnames = [f'{rootpath}/{imgf}' for imgf in imgfiles]
-        # self.iuvnames = [f'{rootpath}/iuv/{imgf[7:-4]}.npz' for imgf in imgfiles]
         self.bbox_centers = data['center'] 
         self.scales = data['scale']*200 
  

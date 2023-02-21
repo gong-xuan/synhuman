@@ -411,7 +411,10 @@ class FuseAlignRegressor(SingleInputRegressor):
         else:
             self.regressor.gt_joints2d_coco = joints_dict["target_joints2d_coco"]
 
-        
+    def set_align_target_infer(self, IUV, joints2D):
+        self.regressor.gt_IUV = IUV
+        self.regressor.gt_joints2d_coco = joints2D
+
 
 
 class MultiscaleAlignRegressor(FuseAlignRegressor):#only align at last regressor

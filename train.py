@@ -26,7 +26,6 @@ def get_arguments():
     #setting
     parser.add_argument('--pr', type=str, default='bj') #ONLY support bj for now
     parser.add_argument('--cra', action='store_true')
-    #parser.add_argument('--reginput',type=str, default='dimensional') #for non-cra 
     parser.add_argument('--reg_ch', type=int, default=512) 
     parser.add_argument('--reg_hw', type=int, default=1) #[16,8,4,2,1]
     

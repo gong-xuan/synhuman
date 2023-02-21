@@ -1,5 +1,7 @@
 LOG_DIR = '../exp_out/cra/logs'
 CKPT_DIR =  '../exp_out/cra/ckpts'
+VIS_DIR =  '../exp_out/cra/vis'
+
 ROOT_PATH = '/a2il/data/xuangong/3dhmr'
 SMPL_MODEL_DIR = f'{ROOT_PATH}/additional/smpl'
 SMPL_FACES_PATH = f'{ROOT_PATH}/additional/smpl_faces.npy'
@@ -24,7 +26,7 @@ PROCESS_PATH = f'{ROOT_PATH}/ProcessedTest'
 SSP3D_IMG_PATH = f'{ROOT_PATH}/ssp_3d/images'#311
 SSP3D_GT = f'{ROOT_PATH}/labels.npz'#311
 
-MPI3DHP_IMG_PATH = f'{ROOT_PATH}/mpii-inf-3dhp/mpi_inf_3dhp_test_set'#2875
+MPI3DHP_IMG_PATH = f'{ROOT_PATH}/mpii-inf-3dhp'#2875
 MPI3DHP_GT = f'{ROOT_PATH}/mpii-inf-3dhp/mpi_inf_3dhp_test.npz'#2875
 
 H36M_IMG_PATH = f'{ROOT_PATH}/h36m'#110233

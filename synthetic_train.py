@@ -10,7 +10,6 @@ from utils.checkpoint_utils import load_training_info_from_checkpoint
 from utils.proxyrep_utils import convert_to_proxyfeat_batch
 import utils.label_conversions as LABELCONFIG
 from utils.cam_utils import orthographic_project_torch
-from utils.proxyrep_utils import convert_to_proxyfeat_batch
 from utils.smpl_utils import smpl_forward
 
 # from smplx.lbs import batch_rodrigues

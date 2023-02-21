@@ -9,7 +9,9 @@ def write_sample_iuv_j2d(iuv, j2d, name, savedir):
 
 
 def fetch_processed_pr_path(datatype, img_crop_scale, bbox_scale):
-    return f'{configs.PROCESS_PATH}/{datatype}/pr_i{img_crop_scale}_s{bbox_scale}'
+    path = f'{configs.PROCESS_PATH}/{datatype}/pr_i{img_crop_scale}_s{bbox_scale}'
+    return path
 
 def fetch_processed_img_path(datatype, img_crop_scale, bbox_scale):
-    return f'{configs.PROCESS_PATH}/{datatype}/image_i{img_crop_scale}_s{bbox_scale}'
+    path = f'{configs.PROCESS_PATH}/{datatype}/image_i{img_crop_scale}_s{bbox_scale}'
+    return path

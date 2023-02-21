@@ -117,10 +117,8 @@ class SingleInputRegressor(nn.Module):
             input_feats = input_feats.view(input_feats.shape[0], input_feats.shape[1],-1) #(bs, ch, hw)
             input_feats = self.reduce_dim(input_feats)[-1]#only use the last one #(bs, ch_target, hw)
         input_feats = input_feats.view(input_feats.shape[0], -1)
-        print(input_feats.shape)
-        import ipdb; ipdb.set_trace()
-        # 
-        
+        # print(input_feats.shape)
+        # import ipdb; ipdb.set_trace()
         
         cam_params, pose_params, shape_params = self.ief_module(input_feats)
         if not self.itersup:

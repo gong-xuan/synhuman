@@ -2,6 +2,7 @@ import os, cv2
 import numpy as np
 from torch.utils.data import Dataset
 import configs
+import utils.label_conversions as LABELCONFIG
 
 def filter_orgdata_with_pr(orgfile_list, imgpath, prpath):
     used_idx = []
@@ -26,7 +27,7 @@ class TestPr_H36M(Dataset):
         
         data = np.load(gtfile, allow_pickle=True)  
         J24_4d = data['S'] #(27558,24,4)
-        self.J17_3d = self.root_centered(J24_4d)
+        self.J17_3d = J24_4d[:, LABELCONFIG.J24_TO_J17, :3]
 
         imgfiles = data['imgname'].tolist()
         # self.bbox_centers = data['center'] #27588*2
@@ -40,21 +41,6 @@ class TestPr_H36M(Dataset):
 
     def __len__(self):
         return self.num_samples
-
-    def root_centered(self, S):
-        J24_to_J17 = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 18, 14, 16, 17]
-        
-        # joints_name = ("R_Ankle0", "R_Knee1", "R_Hip2", "L_Hip3", "L_Knee4", "L_Ankle5", "R_Wrist6",
-        #         "R_Elbow7", "R_Shoulder8", "L_Shoulder9", "L_Elbow10", "L_Wrist11", "Thorax12",
-        #         "Head13", "HeadTop14")
-        # J24_to_J14 = config.H36M_TO_J14
-        # J24_to_J14 = [0,1,2,3,4,5,6,7,8,9,10,11,17,18]
-        
-        center = (S[:,2,:3] +  S[:,3,:3])/2 #between two hip points
-        center = np.expand_dims(center, axis=1)
-        S = S[:, J24_to_J17, :3]
-        # S = S - center
-        return S
 
     def __getitem__(self, index):
         #GT
@@ -76,7 +62,7 @@ class TestPr_MPI3DHP(TestPr_H36M):
     def __init__(self,imgpath, prpath, gtfile=configs.MPI3DHP_GT):
         data = np.load(gtfile, allow_pickle=True)  
         J24_4d = data['S'] #(27558,24,4)
-        self.J14_3d = self.root_centered(J24_4d)
+        self.J17_3d = J24_4d[:, LABELCONFIG.J24_TO_J17, :3]
         imgfiles =data['imgname'].tolist()
         # self.bbox_centers = data['center'] #27588*2
         # self.scales = data['scale']*200 #27588
@@ -85,7 +71,7 @@ class TestPr_MPI3DHP(TestPr_H36M):
         used_idx, self.imgfiles, self.prfiles = filter_orgdata_with_pr(imgfiles, imgpath, prpath)
 
 
-        self.J14_3d = self.J14_3d[used_idx]
+        self.J17_3d = self.J17_3d[used_idx]
         self.num_samples = len(used_idx)
 
 
@@ -110,10 +96,9 @@ class TestPr_3DPW(Dataset):
         return self.num_samples
 
     def __getitem__(self, index):
-        #GT
         pose = self.pose[index]
         shape = self.shape[index]
-        #
+        
         imgname = self.imgfiles[index]
         image = cv2.imread(imgname)
         data = np.load(self.prfiles[index], allow_pickle=True)
@@ -144,11 +129,11 @@ class TestPr_SSP3D(TestPr_3DPW):
         self.num_samples = len(used_idx)
     
     def __getitem__(self, index):
-        #GT
+        
         pose = self.pose[index]
         shape = self.shape[index]
         gender = self.gender[index]
-        #
+        
         imgname = self.imgfiles[index]
         image = cv2.imread(imgname)
         data = np.load(self.prfiles[index],allow_pickle=True)

@@ -1,14 +1,16 @@
-import tqdm
+import os
 import torch
 import numpy as np
 
-from eval.metrics import AverageMeter
-from eval.predict_densepose import setup_densepose_silhouettes, predict_silhouette_densepose
-from eval.predict_joints2d import setup_j2d_predictor, predict_joints2D_new
 from model.model import Build_SMPL
 import eval.metrics as metrics
+from eval.predict_densepose import setup_densepose_silhouettes, predict_silhouette_densepose
+from eval.predict_joints2d import setup_j2d_predictor, predict_joints2D_new
 import utils.label_conversions as LABELCONFIG
 from utils.smpl_utils import smpl_forward
+from utils.proxyrep_utils import convert_to_proxyfeat_batch
+from utils.image_utils import crop_and_resize_iuv_joints2D_torch
+from .vis_prediction import VisMesh
 
 import sys, configs
 sys.path.append(f"{configs.DETECTRON2_PATH}/projects/DensePose")
@@ -19,143 +21,115 @@ class testHMRImg():
                 regressor, 
                 smpl_model, 
                 device, 
-                args, 
-                eval_j14=False):
-
+                args):
         self.regressor = regressor
         self.smpl_model = smpl_model
         self.device = device
         self.pr_mode = args.pr
         self.pr_wh = configs.REGRESSOR_IMG_WH
-        self.eval_j14 = eval_j14
+        self.eval_j14 = args.j14
 
         if args.wgender: #only SSP3D has valid gender #NOT valid for now
             self.smpl_model_male = Build_SMPL(self.batch_size, self.device, gender='male')
             self.smpl_model_female = Build_SMPL(self.batch_size, self.device, gender='female')
         self.wgender = args.wgender
         
-        self.set_detector2D()
+        self.set_detector2D(args)
 
 
-    def set_detector2D(self):
+    def set_detector2D(self, args):
         # Set-up proxy representation predictors.
         self.silhouette_predictor = setup_densepose_silhouettes()
         self.extractor = DensePoseResultExtractor()
         self.joints2D_predictor = setup_j2d_predictor()
-
+        # Record if 2D detection not good
+        self.skip_idx = []
+        self.black_idx = []
+        self.bbox_scale = args.bbox_scale
     
     def get_proxy_rep(self, samples_batch):#batch_size=1
         image = samples_batch['image'][0].numpy()
         center = samples_batch['center'][0].numpy()
         scale = samples_batch['scale'][0].item()
-        IUV = predict_silhouette_densepose(image, self.silhouette_predictor, self.extractor, center, scale)#(3,h,w) torch
-        joints2D = predict_joints2D_new(image, self.joints2D_predictor, center, scale)
-        # import ipdb; ipdb.set_trace()
-        self.IUV = torch.tensor(IUV).permute(1,2,0)[None].to(self.device)#(bs,h,w,3)
-        self.joints2D = torch.tensor(joints2D[:,:2])[None].to(self.device)#(bs,17,2)
+        IUV = predict_silhouette_densepose(image, self.silhouette_predictor, self.extractor, center, scale)#(h,w,3) torch
+        joints2D = predict_joints2D_new(image, self.joints2D_predictor, center, scale)#(17,3) numpy
+        
         if (IUV is None) or (joints2D is None):
-            return None, None, None
+            self.skip_idx.append(samples_batch['n_sample'])
+            return None, None
         else:
-            return self.cal_proxy_rep(image, IUV, joints2D)
-
-    def cal_proxy_rep(self, image, IUV, joints2D):
-        IUV = IUV.to(self.device)
-        if self.pr_mode=='bj':    
+            IUV, joints2D, cropped_img = crop_and_resize_iuv_joints2D_torch(IUV, 
+                                                                configs.REGRESSOR_IMG_WH, 
+                                                                joints2D=joints2D, 
+                                                                image=image, 
+                                                                bbox_scale_factor=self.bbox_scale)
+            #
+            bodymask = (24*IUV[:,:,0]).round().cpu().numpy()
+            fg_ids = np.argwhere(bodymask != 0) 
+            if fg_ids.shape[0]<256:
+                self.black_idx.append(samples_batch['n_sample'])
+                return None, None
             
-            IUV, joints2D, image = crop_and_resize_iuv_joints2D_torch(IUV, self.pr_wh, joints2D=joints2D, 
-            image=image, bbox_scale_factor=self.bbox_scale_factor)
-            target_partseg = (IUV[:,:,0]*24).round() 
-            silhouette = convert_multiclass_to_binary_labels_torch(target_partseg).cpu().numpy()#(H,W)
-            # Create proxy representation
-            heatmaps = convert_2Djoints_to_gaussian_heatmaps(joints2D.astype(np.int16),
-                                                     self.pr_wh)
-            # import ipdb; ipdb.set_trace()
-            proxy_rep = np.concatenate([silhouette[:, :, None], heatmaps], axis=-1)
-            proxy_rep = np.transpose(proxy_rep, [2, 0, 1])  # (C, out_wh, out_WH)
-            proxy_rep = proxy_rep[None]  # add batch dimension
-            proxy_rep = torch.from_numpy(proxy_rep).float().to(self.device)
-            #vis
-            binaryseg = silhouette[:,:,None]
-            binaryseg = np.concatenate([binaryseg,binaryseg,binaryseg],axis=2) 
-            body_mask = binaryseg
-            vis_proxy_rep = body_mask*binaryseg.astype('uint8')*255+(1-body_mask)*image
-            vis_proxy_rep = saveKP2D(joints2D, None, image=vis_proxy_rep, H=self.pr_wh, W=self.pr_wh, color=(0,255,0), addText=False)
-        
+            return IUV[None].to(self.device), torch.tensor(joints2D)[:,:2][None].to(self.device).int()
 
-        
-        return image, proxy_rep, vis_proxy_rep
+    def forward_batch(self, samples_batch):
+        IUV, joints2D = self.get_proxy_rep(samples_batch) #(bs,h,w,3),(bs,17,2)        
+        proxy_rep = convert_to_proxyfeat_batch(IUV, joints2D)
 
-    def forward_batch(self, proxy_rep):
         with torch.no_grad():
             if hasattr(self.regressor, 'add_channels'):
                 if torch.tensor(self.regressor.add_channels).bool().any().item():
-                    # import ipdb; ipdb.set_trace()
-                    self.regressor.gt_IUV = self.IUV
-                    # self.regressor.gt_IUV_mask = None
-                    self.regressor.gt_joints2d_coco = self.joints2D
+                    self.regressor.set_align_target_infer(IUV, joints2D)
             
-            pred_cam_wp, pred_pose, pred_shape, _ = self.regressor(proxy_rep)
-            if VIS:
-                self.pred_cam_wp_list = pred_cam_wp
-                self.pred_pose_list = pred_pose
-                self.pred_shape_list = pred_shape
+            pred_cam_wp_list, pred_pose_list, pred_shape_list = self.regressor(proxy_rep)
+                    
+            _, pred_vertices, pred_joints_all, pred_reposed_vertices, _ = smpl_forward(
+                pred_shape_list[-1], 
+                pred_pose_list[-1],
+                self.smpl_model)
+            
+            pred_joints_h36m = pred_joints_all[:, LABELCONFIG.ALL_JOINTS_TO_H36M_MAP, :]
+            pred_joints_h36mlsp = pred_joints_h36m[:, LABELCONFIG.H36M_TO_J17, :]
+            
+        return  pred_vertices, pred_reposed_vertices, pred_joints_h36mlsp, pred_cam_wp_list[-1]
 
-            pred_cam_wp, pred_pose, pred_shape = pred_cam_wp[0], pred_pose[0], pred_shape[0]
-            # Convert pred pose to rotation matrices
-            if pred_pose.shape[-1] == 24 * 3:
-                pred_pose_rotmats = batch_rodrigues(pred_pose.contiguous().view(-1, 3))
-                pred_pose_rotmats = pred_pose_rotmats.view(-1, 24, 3, 3)
-            elif pred_pose.shape[-1] == 24 * 6:
-                pred_pose_rotmats = rot6d_to_rotmat(pred_pose.contiguous()).view(-1, 24, 3, 3)
-
-            # import ipdb; ipdb.set_trace()
-            # pred_shape[0][1]=0.02
-            pred_vertices, pred_joints_all = self.renderSyn.smpl_model(body_pose=pred_pose_rotmats[:, 1:], #[1,23,3,3]
-                                global_orient=pred_pose_rotmats[:, 0].unsqueeze(1), #[1,1,3,3]
-                                betas=pred_shape,#[1,10]
-                                pose2rot=False)
-        
-            pred_joints_h36m = pred_joints_all[:, config.ALL_JOINTS_TO_H36M_MAP, :]
-            if self.use_j14:
-                pred_joints_h36mlsp = pred_joints_h36m[:, config.H36M_TO_J14, :]
-            else:
-                pred_joints_h36mlsp = pred_joints_h36m[:, config.H36M_TO_J17, :]
-            pred_reposed_vertices, _ = self.renderSyn.smpl_model(betas=pred_shape)
-        return  pred_joints_h36mlsp, pred_reposed_vertices, pred_vertices, pred_cam_wp
-
-
-    def update_metrics_step(self, samples_batch, proxy_rep_batch, printt=False):
-        #forward
-        pred_joints_h36mlsp, pred_reposed_vertices, pred_vertices, pred_cam_wp = self.forward_batch(proxy_rep_batch)
-        
-        #GT
+    def get_target(self, samples_batch):
         if self.withshape:
             target_pose = samples_batch['pose'].to(self.device).float()#bx72
             target_shape = samples_batch['shape'].to(self.device).float()#bx10
-            target_pose_rotmats, target_vertices, joints_all, target_reposed_vertices, _ = smpl_forward(
+            _, target_vertices, joints_all, target_reposed_vertices, _ = smpl_forward(
                 target_shape, 
                 target_pose,
                 self.smpl_model)
 
             target_joints_h36m = joints_all[:, LABELCONFIG.ALL_JOINTS_TO_H36M_MAP, :]
-            
-            if self.eval_j14:
-                target_joints_h36mlsp = target_joints_h36m[:, LABELCONFIG.H36M_TO_J14, :]
-            else:
-                target_joints_h36mlsp = target_joints_h36m[:, LABELCONFIG.H36M_TO_J17, :]
+            target_joints_h36mlsp = target_joints_h36m[:, LABELCONFIG.H36M_TO_J17, :]
         else:
             target_joints_h36mlsp = samples_batch['j17_3d'].to(self.device).float()
-            if self.eval_j14:
-                target_joints_h36mlsp = target_joints_h36mlsp[:,:14]
-            target_vertices = None
-        self.target_vertices = target_vertices
-        # origin at center
-        pred_joints_h36mlsp = pred_joints_h36mlsp - (pred_joints_h36mlsp[:,[2],:]+pred_joints_h36mlsp[:,[3],:])/2
-        target_joints_h36mlsp = target_joints_h36mlsp- (target_joints_h36mlsp[:,[2],:]+target_joints_h36mlsp[:,[3],:])/2
+            target_vertices, target_reposed_vertices = None, None
+        
+        return target_vertices, target_reposed_vertices, target_joints_h36mlsp
+
+    def update_metrics_batch(self, samples_batch, printt=False):
+        pred_vertices, pred_reposed_vertices, pred_joints_h36mlsp, pred_cam_wp = self.forward_batch(samples_batch)
+        if pred_vertices is None:
+            return
+        target_vertices, target_reposed_vertices, target_joints_h36mlsp = self.get_target(samples_batch)
+        
+        if hasattr(self, 'vis'):
+            self.vis.forward_verts(pred_vertices, target_vertices, pred_cam_wp)
+
+        if self.eval_j14:
+            target_joints_h36mlsp = target_joints_h36mlsp[:, LABELCONFIG.J17_TO_J14, :]
+            pred_joints_h36mlsp = pred_joints_h36mlsp[:, LABELCONFIG.J17_TO_J14, :]
+        
+        # re-center
+        pred_joints_h36mlsp = pred_joints_h36mlsp - (pred_joints_h36mlsp[:,[2],:]+pred_joints_h36mlsp[:,[3],:])/2.
+        target_joints_h36mlsp = target_joints_h36mlsp - (target_joints_h36mlsp[:,[2],:]+target_joints_h36mlsp[:,[3],:])/2.
         # no use?
         # pred_vertices = pred_vertices - (pred_joints_h36mlsp[:,[2],:]+pred_joints_h36mlsp[:,[3],:])/2
         # target_vertices = target_vertices - (target_joints_h36mlsp[:,[2],:]+target_joints_h36mlsp[:,[3],:])/2
-        #
+        
         #metric
         batch_size = pred_joints_h36mlsp.shape[0]
         if 'mpjpe_pa' in self.metrics_track:
@@ -209,37 +183,31 @@ class testHMRImg():
                 print(f'pck_pa for {self.pck.count}: {self.pck.average()}')
                 print(f'auc_pa for {self.auc.count}: {self.auc.average()}')
 
-        # saveKP2D(joints2D, f'{visdir}/{n_sample}_{self.pr_mode}_j2d.png', image=image)
-        # print(mpjpe)
-        return None, pred_vertices, pred_cam_wp, target_vertices
+        return 
 
+    def test(self, dataloader, withshape, metrics_track, vis='', print_freq=100):
+        self.withshape = withshape
+        self.metrics_track = metrics_track
+        if vis:
+            visdir = f'{configs.VIS_DIR}/{vis}'
+            if not os.path.isdir(visdir):
+                os.makedirs(visdir)
+            self.vis = VisMesh(visdir, self.batch_size, self.device)
 
-
-
-    def test(self, dataloader, print_freq=100):
-        self.mpjpe_pa = AverageMeter()
-        self.mpjpe_sc = AverageMeter()
-        self.mpjpe = AverageMeter()
-        self.pck = AverageMeter()
-        self.auc = AverageMeter()
-        self.pve = AverageMeter()
-        self.pve_pa = AverageMeter()
-        self.pve_t_sc = AverageMeter()
         
+        self.mpjpe_pa = metrics.AverageMeter()
+        self.mpjpe_sc = metrics.AverageMeter()
+        self.mpjpe = metrics.AverageMeter()
+        self.pck = metrics.AverageMeter()
+        self.auc = metrics.AverageMeter()
+        self.pve = metrics.AverageMeter()
+        self.pve_pa = metrics.AverageMeter()
+        self.pve_t_sc = metrics.AverageMeter()
 
         self.regressor.eval()
-        for n_sample, samples_batch in enumerate(tqdm(dataloader)):
-            images = samples_batch['image'].numpy()
-            cropped_image, proxy_rep_batch, vis_proxy_rep = self.get_proxy_rep(samples_batch)
-            
-            
-            if self.usegender:
-                self.update_metrics_step_withgender(
-                samples_batch, proxy_rep_batch, printt=(n_sample%print_freq==0))
-            else:
-                self.update_metrics_step(
-                    samples_batch, proxy_rep_batch, printt=(n_sample%print_freq==0))
-            
+        for n_sample, samples_batch in enumerate(dataloader):
+            samples_batch['n_sample'] = n_sample
+            self.update_metrics_batch(samples_batch, printt=(n_sample%print_freq==0))
             
         # Complete
         if self.mpjpe_pa.count:  
@@ -262,54 +230,12 @@ class testHMRImg():
         return self.mpjpe_pa.average()
 
 class testHMRPr(testHMRImg):
-    
-    
-    def proxy_rep_vis(self, images_numpy, IUV, joints2D):
-        batch_size = images_numpy.shape[0]
-        body_masks = ((IUV[:,:,:,0]*24).round()>0).cpu().numpy().astype('uint8')
-        vis_proxy_rep_list = []
-        for b in range(batch_size):
-            body_mask = np.expand_dims(body_masks[b], axis=2)
-            image = images_numpy[b]
-            if self.pr_mode=='bj':
-                proxy_image = 255
-            else:#iuv
-                bgr = hsv_to_bgr(IUV[b], keep_background=True)
-                proxy_image = 255*bgr.cpu().numpy()
-            vis_proxy_rep = body_mask*proxy_image+(1-body_mask)*image
-            vis_proxy_rep = saveKP2D(joints2D[b].cpu().numpy(), None, image=vis_proxy_rep, H=self.pr_wh, W=self.pr_wh, color=(0,255,0), addText=False)
-            vis_proxy_rep_list.append(vis_proxy_rep)
-        return vis_proxy_rep_list
+    def set_detector2D(self, args):
+        pass
 
-    def get_proxy_rep(self, samples_batch):#return batch
+    def get_proxy_rep(self, samples_batch):
         images = samples_batch['image'].numpy()
         IUV = samples_batch['iuv'].to(self.device)
         joints2D = samples_batch['j2d'].int().to(self.device)
-        if 'e' in self.pr_mode:
-            rgb_in = torch.tensor(images).to(self.device).permute(0,3,1,2).float()
-            edge = self.renderSyn.edge_detect_model(rgb_in)['thresholded_thin_edges'] 
-        else:
-            edge = None
-        # import ipdb; ipdb.set_trace()
-        self.IUV = IUV##(bs,h,w,3)
-        self.joints2D = joints2D#(bs,17,2)
-        if AUG_IUV:
-            aug_iuv_map = IUV.clone()
-            # seg_extreme_crop = random_extreme_crop(orig_segs=(IUV[:,:,:,0]*24).round(),
-            #                                     extreme_crop_probability=CROP_PROB)
-            seg_extreme_crop =crop_one_coarse_part(orig_segs=(IUV[:,:,:,0]*24).round())
-            aug_iuv_map[seg_extreme_crop==0] = torch.tensor([0,0,0]).float().to(self.device)
-            IUV = aug_iuv_map
-            self.IUV = IUV
-        joints2D_vis = torch.ones(joints2D.shape[:2], device=self.device, dtype=torch.bool)
-        if AUG_J2D:
-            joints2D_vis = random_remove_joints2D(joints2D_vis, REMOVE_JOINTS_INDEX, probability_to_remove=REMOVE_J2D_PROB)
-            # joints2D = random_joints2D_deviation(joints2D.float(),
-            #                             delta_j2d_dev_range=[-int(DEVIATION),int(DEVIATION)],
-            #                             delta_j2d_hip_dev_range=[-int(DEVIATION),int(DEVIATION)])
-            joints2D = joints2D.int()
         
-        # import ipdb; ipdb.set_trace()
-        proxy_rep = convert_to_proxyfeat_batch(self.pr_mode, IUV, joints2D, edge, joints2d_no_occluded_coco=joints2D_vis, mode='test')
-        
-        return images, proxy_rep, vis_proxy_rep_list
+        return IUV, joints2D

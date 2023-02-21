@@ -52,7 +52,19 @@ class P3dRenderer(nn.Module):
         self.cam_R = self.rectify_cam_R(cam_R)
         self.cam_K = cam_K
         self.img_wh = img_wh
+        
         #load Densepose
+        self.load_densepose(img_wh, batch_size, device)
+
+        if render_options.get('rgb'):
+            self.lights_rgb_render = PointLights(device=device,
+                                                 location=((0.0, 0.0, -2.0),),
+                                                 ambient_color=((0.5, 0.5, 0.5),),
+                                                 diffuse_color=((0.3, 0.3, 0.3),),
+                                                 specular_color=((0.2, 0.2, 0.2),))
+        
+
+    def load_densepose(self, img_wh, batch_size, device):
         IUV_processed = IUV_Densepose(device=device)
         self.faces, self.face_indices = IUV_processed.get_faces()
         self.I = IUV_processed.get_I() #(7829,1) 
@@ -69,14 +81,6 @@ class P3dRenderer(nn.Module):
             blur_radius=0.0,
             faces_per_pixel=1, #topK value
         )
-        if render_options.get('rgb'):
-            self.lights_rgb_render = PointLights(device=device,
-                                                 location=((0.0, 0.0, -2.0),),
-                                                 ambient_color=((0.5, 0.5, 0.5),),
-                                                 diffuse_color=((0.3, 0.3, 0.3),),
-                                                 specular_color=((0.2, 0.2, 0.2),))
-        
-
 
     def rectify_cam_R(self, cam_R): #no augmentation
         calibrate_R = torch.tensor([[-1., 0., 0.], [0., -1., 0.], [0., 0., 1.]])#Rz(180)
