@@ -28,10 +28,15 @@ class testHMRImg():
         self.pr_mode = args.pr
         self.pr_wh = configs.REGRESSOR_IMG_WH
         self.eval_j14 = args.j14
-
+        self.batch_size = args.batch_size
+        if args.visnum_per_batch:
+            self.visdir = f'{configs.VIS_DIR}/{args.data}/{args.ckpt}'
+            self.visnum_per_batch = args.visnum_per_batch
+            self.vispr = args.vispr
+        
         if args.wgender: #only SSP3D has valid gender #NOT valid for now
-            self.smpl_model_male = Build_SMPL(self.batch_size, self.device, gender='male')
-            self.smpl_model_female = Build_SMPL(self.batch_size, self.device, gender='female')
+            self.smpl_model_male = Build_SMPL(args.batch_size, self.device, gender='male')
+            self.smpl_model_female = Build_SMPL(args.batch_size, self.device, gender='female')
         self.wgender = args.wgender
         
         self.set_detector2D(args)
@@ -63,7 +68,8 @@ class testHMRImg():
                                                                 joints2D=joints2D, 
                                                                 image=image, 
                                                                 bbox_scale_factor=self.bbox_scale)
-            #
+            if hasattr(self, 'vis'):
+                self.vis.crop_img = cropped_img
             bodymask = (24*IUV[:,:,0]).round().cpu().numpy()
             fg_ids = np.argwhere(bodymask != 0) 
             if fg_ids.shape[0]<256:
@@ -73,9 +79,15 @@ class testHMRImg():
             return IUV[None].to(self.device), torch.tensor(joints2D)[:,:2][None].to(self.device).int()
 
     def forward_batch(self, samples_batch):
-        IUV, joints2D = self.get_proxy_rep(samples_batch) #(bs,h,w,3),(bs,17,2)        
+        IUV, joints2D = self.get_proxy_rep(samples_batch) #(bs,h,w,3),(bs,17,2) 
+        if IUV is None:
+            return None, None, None, None
         proxy_rep = convert_to_proxyfeat_batch(IUV, joints2D)
-
+        #
+        if self.vispr and hasattr(self, 'vis'):
+            self.vis.iuv = IUV
+            self.vis.j2d = joints2D
+        #
         with torch.no_grad():
             if hasattr(self.regressor, 'add_channels'):
                 if torch.tensor(self.regressor.add_channels).bool().any().item():
@@ -91,7 +103,7 @@ class testHMRImg():
             pred_joints_h36m = pred_joints_all[:, LABELCONFIG.ALL_JOINTS_TO_H36M_MAP, :]
             pred_joints_h36mlsp = pred_joints_h36m[:, LABELCONFIG.H36M_TO_J17, :]
             
-        return  pred_vertices, pred_reposed_vertices, pred_joints_h36mlsp, pred_cam_wp_list[-1]
+        return pred_vertices, pred_reposed_vertices, pred_joints_h36mlsp, pred_cam_wp_list[-1]
 
     def get_target(self, samples_batch):
         if self.withshape:
@@ -115,9 +127,8 @@ class testHMRImg():
         if pred_vertices is None:
             return
         target_vertices, target_reposed_vertices, target_joints_h36mlsp = self.get_target(samples_batch)
-        
         if hasattr(self, 'vis'):
-            self.vis.forward_verts(pred_vertices, target_vertices, pred_cam_wp)
+            self.vis.forward_verts(pred_vertices, target_vertices, pred_cam_wp, samples_batch['n_sample'])
 
         if self.eval_j14:
             target_joints_h36mlsp = target_joints_h36mlsp[:, LABELCONFIG.J17_TO_J14, :]
@@ -185,14 +196,14 @@ class testHMRImg():
 
         return 
 
-    def test(self, dataloader, withshape, metrics_track, vis='', print_freq=100):
+    def test(self, dataloader, withshape, metrics_track, eval_ep, print_freq=100):
         self.withshape = withshape
         self.metrics_track = metrics_track
-        if vis:
-            visdir = f'{configs.VIS_DIR}/{vis}'
-            if not os.path.isdir(visdir):
-                os.makedirs(visdir)
-            self.vis = VisMesh(visdir, self.batch_size, self.device)
+        if hasattr(self, 'visdir'):
+            self.visdir = f'{self.visdir}_ep{eval_ep}'
+            if not os.path.isdir(self.visdir):
+                os.makedirs(self.visdir)
+            self.vis = VisMesh(self.visdir, self.batch_size, self.device, self.visnum_per_batch)
 
         
         self.mpjpe_pa = metrics.AverageMeter()
@@ -238,4 +249,7 @@ class testHMRPr(testHMRImg):
         IUV = samples_batch['iuv'].to(self.device)
         joints2D = samples_batch['j2d'].int().to(self.device)
         
+        if hasattr(self, 'vis'):
+            self.vis.crop_img = images
+
         return IUV, joints2D
