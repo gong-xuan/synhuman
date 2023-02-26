@@ -10,7 +10,7 @@ from utils.smpl_utils import smpl_forward, sample_shape
 from utils.bbox_utils import convert_bbox_centre_hw_to_corners, convert_bbox_corners_to_centre_hw
 from utils.cam_utils import perspective_project_torch
 from utils.joints_utils import check_joints2d_occluded_torch, check_joints2d_visibility_torch
-
+from utils.vis_utils import saveKPIUV
 
 class RenderGenerate():
     def __init__(self, smpl_model, batch_size, val_aug_proxy, device='cpu', render_options={'j2D':1,'depth':1, 'normal':1, 'iuv':1}):
@@ -173,9 +173,8 @@ class RenderGenerate():
             joints2d_coco, iuv_map, depth_map, normal_map = self.batch_crop_bounding_box_resize(
                 iuv_map, joints2D=joints2d_coco, depth_map=depth_map, normal_map=normal_map)
                 
-        # print('crop', datetime.now().strftime("%m%d%H%M%S"))
-        # saveKPIUV(joints2d_coco, iuv_map,rootpath='vis2')
-
+        # saveKPIUV(joints2d_coco, iuv_map, rootpath=f'{configs.VIS_DIR}/trainpr/')
+        # import ipdb; ipdb.set_trace()
         #CHECK OCCLUSION BEFORE PROXY AUGMENT
         joints2d_coco = joints2d_coco.int()
         joints2d_vis_coco = check_joints2d_visibility_torch(joints2d_coco, configs.REGRESSOR_IMG_WH)#(bs,17)

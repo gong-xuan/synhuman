@@ -51,20 +51,22 @@ if __name__ == '__main__':
     if args.log=='debug':
         logfile = f'debug'
     else:
-        logfile = f'{args.log}-{datetime.now().strftime("%m%d%H%M%S")}'
+        logfile = f'{args.log}-{datetime.now().strftime("%m%d%H%M")}'
     if not os.path.isdir(configs.LOG_DIR):
         os.makedirs(configs.LOG_DIR)
     log_path= f'{configs.LOG_DIR}/{logfile}.txt'
     
-    model_savedir = f'{configs.CKPT_DIR}/{args.log}'
+    model_savedir = f'{configs.CKPT_DIR}/{logfile}'
     if not os.path.isdir(model_savedir):
         os.makedirs(model_savedir)
-    #
-    handlers = [logging.StreamHandler()]
-    handlers.append(logging.FileHandler(log_path, mode='a'))
+    
     logging.basicConfig(level=logging.INFO,
-        format='%(asctime)s - %(levelname)s - %(message)s', handlers=handlers,     
-    )
+                        format="%(asctime)s - %(name)s - %(message)s",
+                        datefmt='%d-%b-%y %H:%M:%S',
+                        force=True,
+                        handlers=[logging.FileHandler(log_path),
+                                logging.StreamHandler()])
+
 
     # Run
     os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu

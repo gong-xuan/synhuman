@@ -48,6 +48,7 @@ if __name__ == '__main__':
     pr_path = fetch_processed_pr_path(args.data, args.img_crop_scale, args.bbox_scale)
     img_path= fetch_processed_img_path(args.data, args.img_crop_scale, args.bbox_scale)
     test_w_pr = os.path.exists(pr_path) and os.path.exists(img_path)
+    # test_w_pr = False
     if not test_w_pr:
         pr_path, img_path = '', ''
         args.batch_size = 1

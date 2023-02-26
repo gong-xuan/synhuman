@@ -3,13 +3,14 @@ import numpy as np
 from torch.utils.data import Dataset
 import configs
 import utils.label_conversions as LABELCONFIG
+from utils.io_utils import fetch_processed_imgpr_name
 
-def filter_orgdata_with_pr(orgfile_list, imgpath, prpath):
+def filter_orgdata_with_pr(datatype, orgfile_list, imgpath, prpath):
     used_idx = []
     imgfiles = []
     prfiles = []
     for n, orgfile in enumerate(orgfile_list):
-        savename = orgfile.split('/')[-1][:-4]
+        savename = fetch_processed_imgpr_name(datatype,orgfile)
         imgfile = f'{imgpath}/{savename}.png'
         prfile = f'{prpath}/{savename}.npz'
         if os.path.exists(imgfile) and os.path.exists(prfile):
@@ -33,7 +34,7 @@ class TestPr_H36M(Dataset):
         # self.bbox_centers = data['center'] #27588*2
         # self.scales = data['scale']*200 #27588
         
-        used_idx, self.imgfiles, self.prfiles = filter_orgdata_with_pr(imgfiles, imgpath, prpath)
+        used_idx, self.imgfiles, self.prfiles = filter_orgdata_with_pr('h36m', imgfiles, imgpath, prpath)
 
         self.J17_3d = self.J17_3d[used_idx]
         self.num_samples = len(used_idx)
@@ -68,7 +69,7 @@ class TestPr_MPI3DHP(TestPr_H36M):
         # self.scales = data['scale']*200 #27588
         # import ipdb; ipdb.set_trace() 
         
-        used_idx, self.imgfiles, self.prfiles = filter_orgdata_with_pr(imgfiles, imgpath, prpath)
+        used_idx, self.imgfiles, self.prfiles = filter_orgdata_with_pr('mpi', imgfiles, imgpath, prpath)
 
 
         self.J17_3d = self.J17_3d[used_idx]
@@ -82,7 +83,7 @@ class TestPr_3DPW(Dataset):
         self.shape = data['shape']
         
         imgfiles = data['imgname'].tolist()
-        used_idx, self.imgfiles, self.prfiles = filter_orgdata_with_pr(imgfiles, imgpath, prpath)
+        used_idx, self.imgfiles, self.prfiles = filter_orgdata_with_pr('3dpw', imgfiles, imgpath, prpath)
 
         self.pose = self.pose[used_idx]
         self.shape = self.shape[used_idx]
@@ -122,7 +123,7 @@ class TestPr_SSP3D(TestPr_3DPW):
         self.joints2D = data['joints2D']
         #
         imgfiles = data['fnames'].tolist()
-        used_idx, self.imgfiles, self.prfiles = filter_orgdata_with_pr(imgfiles, imgpath, prpath)
+        used_idx, self.imgfiles, self.prfiles = filter_orgdata_with_pr('ssp3d', imgfiles, imgpath, prpath)
 
         self.pose = self.pose[used_idx]
         self.shape = self.shape[used_idx]

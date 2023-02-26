@@ -1,7 +1,6 @@
 import numpy as np
 import os, argparse, sys, cv2
 import torch
-from torch.utils.data import DataLoader
 
 import configs
 from dataload.dataloader import Build_Test_Dataloader
@@ -11,7 +10,7 @@ from eval.predict_joints2d import setup_j2d_predictor, predict_joints2D_new
 
 
 from utils.image_utils import crop_and_resize_iuv_joints2D_torch, crop_bbox_centerscale
-from utils.io_utils import write_sample_iuv_j2d, fetch_processed_pr_path, fetch_processed_img_path
+from utils.io_utils import write_sample_iuv_j2d, fetch_processed_pr_path, fetch_processed_img_path, fetch_processed_imgpr_name
 
 sys.path.append(f"{configs.DETECTRON2_PATH}/projects/DensePose")
 from densepose.vis.extractor import DensePoseResultExtractor
@@ -74,7 +73,7 @@ def debug_pred(dataset, joints2D_predictor, silhouette_predictor, extractor, nli
 def get_arguments():
     parser = argparse.ArgumentParser()
     parser.add_argument('--data', type=str, default='h36mp2') #[h36mp1, h36mp2, ssp3d, 3dpw, mpi]
-    parser.add_argument('--gpu', type=str, default='0')
+    parser.add_argument('--gpu', type=str, default='7')
     parser.add_argument('--img_crop_scale', type=float, default=0) #1.5
     parser.add_argument('--bbox_scale', type=float, default=1.2)
     parser.add_argument('--shuffle', action='store_true')
@@ -135,8 +134,7 @@ if __name__ == '__main__':
         # bodymask = np.argwhere(IUV[:,:,0].cpu().numpy()!=0)
         # x0,y0 = np.amin(bodymask,axis=0)
         # x1,y1 = np.amax(bodymask,axis=0)
-        
-        savename = imagename.split('/')[-1][:-4]
+        savename = fetch_processed_imgpr_name(args.data, imagename)
         write_sample_iuv_j2d(IUV.numpy(), joints2D, savename, save_pr_dir)
         cv2.imwrite(f'{save_img_dir}/{savename}.png', cropped_img)
 

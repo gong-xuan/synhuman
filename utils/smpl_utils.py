@@ -12,6 +12,7 @@ def smpl_forward(shape, pose, smpl_model=None):
     # target_rotmats = torch.cat([glob_rotmats, pose_rotmats], dim=1)
     # Convert pred pose to rotation matrices
     assert pose.shape[0] == shape.shape[0]
+    inp_bs = pose.shape[0]
     assert pose.device == shape.device
 
     if pose.shape[-1] == 24*3:
@@ -21,9 +22,9 @@ def smpl_forward(shape, pose, smpl_model=None):
         all_rotmats = rot6d_to_rotmat(pose.contiguous()).view(-1, 24, 3, 3)
 
     glob_rotmats, pose_rotmats = all_rotmats[:, 0].unsqueeze(1), all_rotmats[:, 1:]
-    if smpl_model is None:
-        batch_size = pose.shape[0]
-        smpl_model = Build_SMPL(batch_size, pose.device)
+    if smpl_model is None or smpl_model.batch_size != inp_bs:
+        smpl_model = Build_SMPL(inp_bs, pose.device)
+    
     smpl_vertices, smpl_joints = smpl_model(body_pose=pose_rotmats.contiguous(),
                             global_orient=glob_rotmats.contiguous(),
                             betas=shape.contiguous(),

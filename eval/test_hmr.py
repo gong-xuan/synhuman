@@ -69,7 +69,7 @@ class testHMRImg():
                                                                 image=image, 
                                                                 bbox_scale_factor=self.bbox_scale)
             if hasattr(self, 'vis'):
-                self.vis.crop_img = cropped_img
+                self.vis.crop_img = cropped_img[None]
             bodymask = (24*IUV[:,:,0]).round().cpu().numpy()
             fg_ids = np.argwhere(bodymask != 0) 
             if fg_ids.shape[0]<256:
@@ -84,7 +84,7 @@ class testHMRImg():
             return None, None, None, None
         proxy_rep = convert_to_proxyfeat_batch(IUV, joints2D)
         #
-        if self.vispr and hasattr(self, 'vis'):
+        if hasattr(self, 'vis') and self.vispr:
             self.vis.iuv = IUV
             self.vis.j2d = joints2D
         #
