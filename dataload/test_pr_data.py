@@ -10,7 +10,7 @@ def filter_orgdata_with_pr(datatype, orgfile_list, imgpath, prpath):
     imgfiles = []
     prfiles = []
     for n, orgfile in enumerate(orgfile_list):
-        savename = fetch_processed_imgpr_name(datatype,orgfile)
+        savename = fetch_processed_imgpr_name(datatype, orgfile, smpl_id=n)
         imgfile = f'{imgpath}/{savename}.png'
         prfile = f'{prpath}/{savename}.npz'
         if os.path.exists(imgfile) and os.path.exists(prfile):
@@ -88,6 +88,7 @@ class TestPr_3DPW(Dataset):
         self.pose = self.pose[used_idx]
         self.shape = self.shape[used_idx]
         self.num_samples = len(used_idx)
+        print('============',used_idx)
         # self.prep_wh = proxy_rep_input_wh
         # self.crop = crop
         # self.bbox_centers = data['center'] #35515*2

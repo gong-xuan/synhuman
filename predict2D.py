@@ -76,9 +76,10 @@ def get_arguments():
     parser.add_argument('--gpu', type=str, default='7')
     parser.add_argument('--img_crop_scale', type=float, default=0) #1.5
     parser.add_argument('--bbox_scale', type=float, default=1.2)
-    parser.add_argument('--shuffle', action='store_true')
-    parser.add_argument('--batch_size', type=int, default=1)
-    parser.add_argument('--num_workers', type=int, default=4) 
+    # parser.add_argument('--shuffle', action='store_true')
+    # parser.add_argument('--batch_size', type=int, default=1)
+    parser.add_argument('--num_workers', type=int, default=4)
+    parser.add_argument('--visbug_path', type=str, default='')  
     args = parser.parse_args()
     return args
 
@@ -94,6 +95,8 @@ if __name__ == '__main__':
     extractor = DensePoseResultExtractor()
     
     #data 
+    args.batch_size = 1
+    args.shuffle = False
     dataloader, _, _ = Build_Test_Dataloader(args)
     
     save_pr_dir = fetch_processed_pr_path(args.data, args.img_crop_scale, args.bbox_scale)
@@ -104,7 +107,13 @@ if __name__ == '__main__':
         os.makedirs(save_img_dir)
     ########
     # debug_pred(dataset, joints2D_predictor, silhouette_predictor, extractor)
-    
+    if args.visbug_path:
+        args.visbug_path = f'{configs.VIS_DIR}/{args.visbug_path}'
+        if not os.path.isdir(args.visbug_path):
+            os.makedirs(args.visbug_path)
+    ####
+
+
     skip_idx = []
     black_idx = []
     count=0
@@ -114,8 +123,8 @@ if __name__ == '__main__':
         center = samples_batch['center'][0].numpy()
         scale = samples_batch['scale'][0].item()
 
-        IUV = predict_silhouette_densepose(image, silhouette_predictor, extractor, center, scale)#(img, imgw, 3)
-        joints2D = predict_joints2D_new(image, joints2D_predictor, center, scale)#(17,3)
+        IUV = predict_silhouette_densepose(image, silhouette_predictor, extractor, center, scale, visbug_path=args.visbug_path, img_id=n_sample)#(img, imgw, 3)
+        joints2D = predict_joints2D_new(image, joints2D_predictor, center, scale, visbug_path=args.visbug_path, img_id=n_sample)#(17,3)
         if (IUV is None) or (joints2D is None):
             skip_idx.append(n_sample)
             continue
@@ -134,7 +143,7 @@ if __name__ == '__main__':
         # bodymask = np.argwhere(IUV[:,:,0].cpu().numpy()!=0)
         # x0,y0 = np.amin(bodymask,axis=0)
         # x1,y1 = np.amax(bodymask,axis=0)
-        savename = fetch_processed_imgpr_name(args.data, imagename)
+        savename = fetch_processed_imgpr_name(args.data, imagename, smpl_id=n_sample)
         write_sample_iuv_j2d(IUV.numpy(), joints2D, savename, save_pr_dir)
         cv2.imwrite(f'{save_img_dir}/{savename}.png', cropped_img)
 

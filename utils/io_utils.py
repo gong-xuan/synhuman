@@ -16,10 +16,11 @@ def fetch_processed_img_path(datatype, img_crop_scale, bbox_scale):
     path = f'{configs.PROCESS_PATH}/{datatype}/image_i{img_crop_scale}_s{bbox_scale}'
     return path
 
-def fetch_processed_imgpr_name(datatype, rawimg_fullpath):
-    if datatype == '3dpw':
+def fetch_processed_imgpr_name(datatype, rawimg_fullpath, smpl_id=None):
+    if datatype == '3dpw': #has multi-person smpl annot for one image
+        assert smpl_id is not None
         keywords = "_".join(rawimg_fullpath.split('/')[-2:])
-        savename = keywords[:-4]
+        savename = f'{keywords[:-4]}_{smpl_id}'
     elif datatype == 'mpi':
         keywords = "_".join(rawimg_fullpath.split('/')[-3:])
         savename = keywords[:-4]

@@ -33,7 +33,8 @@ class testHMRImg():
             self.visdir = f'{configs.VIS_DIR}/{args.data}/{args.ckpt}'
             self.visnum_per_batch = args.visnum_per_batch
             self.vispr = args.vispr
-        
+        else:
+            self.visdir = ''
         if args.wgender: #only SSP3D has valid gender #NOT valid for now
             self.smpl_model_male = Build_SMPL(args.batch_size, self.device, gender='male')
             self.smpl_model_female = Build_SMPL(args.batch_size, self.device, gender='female')
@@ -51,12 +52,14 @@ class testHMRImg():
         self.skip_idx = []
         self.black_idx = []
         self.bbox_scale = args.bbox_scale
+        #
     
     def get_proxy_rep(self, samples_batch):#batch_size=1
         image = samples_batch['image'][0].numpy()
         center = samples_batch['center'][0].numpy()
         scale = samples_batch['scale'][0].item()
-        IUV = predict_silhouette_densepose(image, self.silhouette_predictor, self.extractor, center, scale)#(h,w,3) torch
+        IUV = predict_silhouette_densepose(image, self.silhouette_predictor, self.extractor, center, scale, 
+                    visbug_path='', img_id=samples_batch['n_sample'])#(h,w,3) torch
         joints2D = predict_joints2D_new(image, self.joints2D_predictor, center, scale)#(17,3) numpy
         
         if (IUV is None) or (joints2D is None):
@@ -75,7 +78,17 @@ class testHMRImg():
             if fg_ids.shape[0]<256:
                 self.black_idx.append(samples_batch['n_sample'])
                 return None, None
+            # if True:
+            #     from utils.io_utils import write_sample_iuv_j2d, fetch_processed_pr_path, fetch_processed_img_path, fetch_processed_imgpr_name
+            #     import cv2
+            #     imagename = samples_batch['imgname'][0]
+            #     savename = fetch_processed_imgpr_name('3dpw', imagename)
+            #     save_pr_dir = fetch_processed_pr_path('3dpw', 0, self.bbox_scale)
+            #     save_img_dir = fetch_processed_img_path('3dpw', 0, self.bbox_scale)
             
+            #     write_sample_iuv_j2d(IUV.numpy(), joints2D, savename, save_pr_dir)
+            #     cv2.imwrite(f'{save_img_dir}/{savename}.png', cropped_img)
+            #     print(f'Saved....{save_img_dir}/{savename}.png and {save_pr_dir}/{savename}.npz')
             return IUV[None].to(self.device), torch.tensor(joints2D)[:,:2][None].to(self.device).int()
 
     def forward_batch(self, samples_batch):
@@ -199,12 +212,11 @@ class testHMRImg():
     def test(self, dataloader, withshape, metrics_track, eval_ep, print_freq=100):
         self.withshape = withshape
         self.metrics_track = metrics_track
-        if hasattr(self, 'visdir'):
+        if self.visdir:
             self.visdir = f'{self.visdir}_ep{eval_ep}'
             if not os.path.isdir(self.visdir):
                 os.makedirs(self.visdir)
             self.vis = VisMesh(self.visdir, self.batch_size, self.device, self.visnum_per_batch)
-
         
         self.mpjpe_pa = metrics.AverageMeter()
         self.mpjpe_sc = metrics.AverageMeter()
@@ -217,6 +229,8 @@ class testHMRImg():
 
         self.regressor.eval()
         for n_sample, samples_batch in enumerate(dataloader):
+            # if n_sample not in [8192, 17152]:
+            #     continue
             samples_batch['n_sample'] = n_sample
             self.update_metrics_batch(samples_batch, printt=(n_sample%print_freq==0))
             

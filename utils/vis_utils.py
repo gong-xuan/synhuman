@@ -115,6 +115,8 @@ def vis_j2d_occlusion_batch(IUV_batch, j2d_batch, j2d_no_occluded_mask_batch, vi
         cv2.imwrite(f'{visdir}/{b}.png', vis_image)
         # import ipdb; ipdb.set_trace()
 
+
+
 def vis_bboxs(save_path, image, bboxs, gt_box=None, gt_center=None):
     for n in range(bboxs.shape[0]):
         x0, y0, x1, y1 = bboxs[n]
@@ -127,6 +129,7 @@ def vis_bboxs(save_path, image, bboxs, gt_box=None, gt_center=None):
     if gt_center is not None:
         x , y = gt_center
         image = cv2.circle(image, (int(x), int(y)), 20, (0,0,255), -1)
+    # import ipdb; ipdb.set_trace()
     cv2.imwrite(save_path, image)
 
 

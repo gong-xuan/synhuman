@@ -53,16 +53,34 @@ def get_largest_centred_bounding_box(bboxes, orig_w, orig_h):
     return largest_centred_bbox_index
 
 
-def select_bbox_max_IOU(bboxs, inside_list, center, scale, imgh, imgw, wh=256, bbox_to_square=True):
-    #bbox after square
-    gt_bmap = np.zeros((imgh, imgw))
-    ##
+def bbox_center_scale_2_xy(center, scale, imgh, imgw, wh=256):
     tmat = get_transform(center, scale, wh, wh) #res
     ul = np.dot(tmat, np.array([0,0,1]).T)[:2]
     br = np.dot(tmat, np.array([wh-1, wh-1, 1]).T)[:2]#res
     ul, br = ul.astype('int'), br.astype('int')
-    x0_gt, x1_gt = max(0, ul[0]), min(imgw-1, br[0])
-    y0_gt, y1_gt = max(0, ul[1]), min(imgh-1, br[1])
+    x0, x1 = max(0, ul[0]), min(imgw-1, br[0])
+    y0, y1 = max(0, ul[1]), min(imgh-1, br[1])
+    return x0, x1, y0, y1
+
+def vis_gt_bbox(save_path, image, scale, center):
+    import cv2
+    imgh, imgw = image.shape[:2]
+    x0, x1, y0, y1 = bbox_center_scale_2_xy(center, scale, imgh, imgw)
+    image = cv2.rectangle(image, (x0,y0), (x1,y1),  (0,0,255), 5)
+    cv2.imwrite(save_path, image)
+
+
+def select_bbox_max_IOU(bboxs, inside_list, center, scale, imgh, imgw, wh=256, bbox_to_square=True):
+    #bbox after square
+    gt_bmap = np.zeros((imgh, imgw))
+    ##
+    # tmat = get_transform(center, scale, wh, wh) #res
+    # ul = np.dot(tmat, np.array([0,0,1]).T)[:2]
+    # br = np.dot(tmat, np.array([wh-1, wh-1, 1]).T)[:2]#res
+    # ul, br = ul.astype('int'), br.astype('int')
+    # x0_gt, x1_gt = max(0, ul[0]), min(imgw-1, br[0])
+    # y0_gt, y1_gt = max(0, ul[1]), min(imgh-1, br[1])
+    x0_gt, x1_gt, y0_gt, y1_gt = bbox_center_scale_2_xy(center, scale, imgh, imgw, wh)
     gt_bmap[y0_gt:y1_gt, x0_gt:x1_gt] = 1
     ##
     nbest = inside_list.index(True)
@@ -132,8 +150,7 @@ def select_bboxes_gtcrop(input_image, bboxes, center, scale, target_wh=256, visp
         if sum(inside_list)==0:
             print('No bbox detected...')
             return False, None
-        idx = inside_list.index(True) #return the first idx that is True
-        # import ipdb; ipdb.set_trace()
+        idx = inside_list.index(True) #return the first idx that is True        
         if sum(inside_list)>1:
             # idx1 = select_bbox_largest_area(bbox)
             idx1 = select_bbox_closest_center(bboxes, inside_list, center, img_h*img_w)
@@ -142,9 +159,12 @@ def select_bboxes_gtcrop(input_image, bboxes, center, scale, target_wh=256, visp
             if vispath_ambiguous and not consistent:
                 verified = False
                 vis_bboxs(vispath_ambiguous, image, torch.cat([bboxes[idx1][None], bboxes[idx2][None]], dim=0), 
-                    gt_box=torch.tensor(gt_box), gt_center=center)
+                        gt_box=torch.tensor(gt_box), gt_center=center)
                 # import ipdb; ipdb.set_trace()
             idx = idx2
+        if vispath_ambiguous:
+            vis_bboxs(f'{vispath_ambiguous}', image, bboxes[[idx]], gt_box=None, gt_center=None)
+        
     return verified, idx
 
 

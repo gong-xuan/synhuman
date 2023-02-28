@@ -11,7 +11,7 @@ from utils.checkpoint_utils import load_ckpt_woSMPL
 def get_arguments():
     parser = argparse.ArgumentParser()
     parser.add_argument('--gpu', type=str, default='2')
-    parser.add_argument('--batch_size', type=int, default=128) 
+    parser.add_argument('--batch_size', type=int, default=256) 
     parser.add_argument('--num_workers', type=int, default=4) 
     parser.add_argument('--shuffle', type=int, default=1) 
     #model setting
@@ -53,10 +53,13 @@ if __name__ == '__main__':
         pr_path, img_path = '', ''
         args.batch_size = 1
         print("Infer from scratch...")
-    dataloader, withshape, metrics_track = Build_Test_Dataloader(args, pr_path, img_path)
-
+    
     if args.visnum_per_batch:
         args.shuffle = False #unify name of saved images
+    
+    dataloader, withshape, metrics_track = Build_Test_Dataloader(args, pr_path, img_path)
+
+    
     # Model
     regressor, smpl_model = Build_Model(args.batch_size, 
                                         cra_mode=args.cra, 

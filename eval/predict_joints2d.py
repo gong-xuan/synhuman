@@ -58,7 +58,7 @@ def predict_joints2D(input_image, predictor):
 
 
 
-def predict_joints2D_new(input_image, predictor, center, scale):
+def predict_joints2D_new(input_image, predictor, center, scale, visbug_path='', img_id=0):
     """
     Predicts 2D joints (17 2D joints in COCO convention along with prediction confidence)
     given a cropped and centred input image.
@@ -72,7 +72,8 @@ def predict_joints2D_new(input_image, predictor, center, scale):
     keypoints = outputs['instances'].pred_keypoints.cpu().numpy()#pred_keypoint_heatmaps(1,17,56,56)
     # 
     if scale>0:
-        verified, idx = select_bboxes_gtcrop(input_image, bboxes, center, scale, target_wh=256, vispath_ambiguous='')
+        verified, idx = select_bboxes_gtcrop(input_image, bboxes, center, scale, target_wh=256, 
+                    vispath_ambiguous=f'{visbug_path}/{img_id}box4kp.png' if visbug_path else '')
     else:
         verified = True if bboxes.shape[0]>0 else False
         if verified:

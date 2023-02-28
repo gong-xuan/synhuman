@@ -37,15 +37,19 @@ def setup_densepose_silhouettes(backbone='dl101'):
     return silhouette_predictor
 
 
-def predict_silhouette_densepose(input_image, predictor, extractor, center, scale, pad_to_imgsize=True):
+def predict_silhouette_densepose(input_image, predictor, extractor, center, scale, pad_to_imgsize=True, visbug_path='' , img_id=0):
     img_h, img_w = input_image.shape[:2] 
     with torch.no_grad():
         outputs = predictor(input_image)["instances"]
     # segm = outputs.get("pred_densepose").fine_segm
     bboxes = outputs.get("pred_boxes").tensor #x0,y0,x1,y1
     # 
+    from utils.bbox_utils import vis_gt_bbox
+    # if visbug_path:
+    #     vis_gt_bbox(f'{visbug_path}/{img_id}.png', input_image, scale, center)
     if scale>0:
-        verified, idx = select_bboxes_gtcrop(input_image, bboxes, center, scale,target_wh=256, vispath_ambiguous='')
+        verified, idx = select_bboxes_gtcrop(input_image, bboxes, center, scale, target_wh=configs.REGRESSOR_IMG_WH, 
+                                vispath_ambiguous=f'{visbug_path}/{img_id}box4iuv.png' if visbug_path else '')
     else:
         verified = True if bboxes.shape[0]>0 else False
         if verified:
